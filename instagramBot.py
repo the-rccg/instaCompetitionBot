@@ -271,8 +271,8 @@ def checkForContest(post, minScore):
                   'i received':4, 'thanks to @':4, 'thank you to @':4,
                   # Repost ?
                   '@instatoolsapp':6, '@regram.app':6, 'repostapp':6, 'regrann':6, 'regram':6, '@get_repost':6, '@renstapp':6,
-                  'repost any':6,
-                  'respost from @':6,
+                  'repost any':6,  # need to repost pictures from before, not yet included
+                  'respost from @':6, 'repostby @':6, 'repost by @':6,
                   # Closed
                   'congratulation':6, 'congrats ':6, 'congrats to':6,
                   'winner is @':6, 'winner is... @':6, 'winners are @':6, 'winner was @':6,
