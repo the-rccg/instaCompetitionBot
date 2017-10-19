@@ -4,12 +4,17 @@ Instagram Competition Automation
 @author: RCCG
 
 TODOs:
+    [ ]  create log, make timing dependent on log since last action was taken, log account name to allow expansion for multiple accounts later on.
+    [ ]  split on "bonus" "optional" "double/extra chance" etc to find repost required versus bonus
+    [ ]  recognize: pick a number between
+
     [ ]  implement wait list for posts to be confirmed to allow continuous running
     [ ]  implement recognizing deadlines
     [ ]  implement cross check for "today" and time < 24 hours
     [ ]  implement get people tags from previous comments
     [ ]  count 404 429 errors
     [ ]  implement check if commented before
+    [ ]  implement in indivudual comments
     [ ]  implement check own feed instead
     [ ]  implement new/viewed parameter
     [ ]  implement unfollow after no contest in X months
@@ -24,14 +29,16 @@ TODOs:
     [ ]  implement check after 7 days for counting people entered
     [ ]  implement keeping track of other tags in contests entered/won/etc.
     [ ]  implement keeping track of failed follow finding
-    [ ]  implement recognition of 'shoe size'
+    [ ]  recogniyze: 'shoe size'
     [ ]  reduce checks for to 1: for Followers (usernames), Followings (ID)
+    [ ]  maximum number of tags
 
 Features:
-    [x]  Uses Follow List as
+    [x]  Uses List of own followers to tag (filters out spam accounts)
     [x]  Given Names, searches for relevant users and follows them
     [x]  Given Tags, adds the Tag feeds to search for contests
-    [x]  Detects contests based on key word values
+    [x]  Detects contests based on key word value dictionary
+    [x]  Recognizes foreign languages, phone numbers, websites, reposts to find competition
     [x]  Detects if contest requires: Like, Comment, Tags, Repost
     [x]  Allows for Liking, Commenting, Tagging, Reposting
     [x]  Checks if already entered by checking for like
@@ -46,6 +53,8 @@ Features:
     [x]  implement only items newer than X retrieved
     [x]  implement retrieve more items
     [x]  implement help function
+
+    [x]  After following checks users again to allow for loops
 
 
 Maybe Future:
@@ -69,30 +78,35 @@ print("Successfully loaded all modules")
 # Account Details
 accName = ""
 accPw   = ""
+primaryAccount = ""
+
 # Book keeping Parameters
-filenames     = ['contests.csv', 'stats.csv']
-testing       =     0  # 2=check, 1=no-repost, 0=automated.
+filenames      = ['contests.csv', 'stats.csv']
+testing        =     1  # 2=check, 1=no-repost, 0=automated.
+slowdownFactor =     5  # time between czcles: 5 min * slowdown Factor
 # Run parameters
-maxLength     =  1000  # Maximum # of  characters for display
-minScore      =     3  # Minimum # of  points     to enter  (contest score)
-maxDays       =     7  # Maximum # of  days old   to check for contest
+maxLength      =  1000  # Maximum # of  characters for display
+minScore       =     3  # Minimum # of  points     to enter  (contest score)
+maxDays        =     7  # Maximum # of  days old   to check for contest
 # Prevent Fake Accounts
-minFollowers  =   200  # Minimum # of  followers  for search
-minFollowing  =    10  # Minimum # of  followed   for search
-minPosts      =     5  # Minimum # of  posts of an account to enter to prevent spam
+minFollowers   =   400  # Minimum # of  followers  for search
+minFollowing   =    10  # Minimum # of  followed   for search
+minPosts       =     5  # Minimum # of  posts of an account to enter to prevent spam
+# Prevent Banning
+#maxToLike     =   500
 # Commenting Parameters
-baseComment1  = ['yes', 'perfect', 'awesome', 'fantastic', 'done', 'love it']
-baseComment2  = ['!', ' ❤️', ' ', ' !', ' <3']
-baseComments  = [word+ending for word,ending in itertools.product(baseComment1, baseComment2)]
-minComments   =     8  # Minimum # of  comments   before taking most commented answer
-maxTagsCopy   =     5  # Maximum # of  tags       to copy from post
-minLength     =    80  # Minimum # of  characters in alphanumeric words to check
-minTimePassed = 24*60  # Minimum # of  minutes    before checking followers again
+baseComment1   = ['yes', 'perfect', 'awesome', 'fantastic', 'done', 'love it', 'amazing'] #'wish me luck', '#win hopefully', 'youre the best'
+baseComment2   = ['!', ' ❤️', ' ', ' !', ' <3']
+baseComments   = [word+ending for word,ending in itertools.product(baseComment1, baseComment2)]
+minComments    =     3  # Minimum # of  comments   before taking most commented answer
+maxTagsCopy    =     5  # Maximum # of  tags       to copy from post
+minLength      =    80  # Minimum # of  characters in alphanumeric words to check
+minTimePassed  = 72*60  # Minimum # of  minutes    before checking followers again
 #inactiveMonths =  6  # unfollow if not posted in X months
 
 # New to add
 searchUserList = []  # 'Thomas Pink'
-searchTagList  = ['#giveaway', '#freebies', '#nopurchasenecessary', '#chancetowin'] # , 'freegift'
+searchTagList  = ['#giveaway']#, '#freebies', '#nopurchasenecessary', '#chancetowin'] # , 'freegift'
 #################################################################
 print("Successfully loaded all parameters")
 
@@ -228,18 +242,30 @@ def checkForContest(post, minScore):
     positives  = {'giveaway':2, 'give away':3, 'giving away':3, 'free':2, 'no purchase':4, #'nopurchase':2,
                   'contest':1, 'win':1, 'comment':1, 'chance':2, 'like':1, 'tag':1, 'friend':1, 'gift package':2}
     negatives  = {
-                  'open house':1, 'fundraiser':2, 'fundraising':2,
-                  'snap':1, 'best':1, 'class':1, 'donate':1, 'go to':1,   #'lucky customer':1, 'your address':1, 'results':1,
-                  'casino':1, 'stay tuned':1,
+                  'open house':1, 'raffle':3,
+                  'snap':1, 'best':1, 'class':1, 'go to':1,   #'lucky customer':1, 'your address':1, 'results':1,
+                  'casino':1, 'stay tuned':3,
+                  # Avoid good causes to spam
+                  'fundraiser':6, 'fundraising':6, 'donate':1, 'donations':4,
+                  'raredisease':6,
+                  # useless stuff
+                  '#slime':8, ' slime':8, 'dragon ball':6, 'csgo':6, 'stickers':4, 'pokemon':6,
+                  'weed':8, # gets you banned
+                  'photoshoot':4, 'ebook':8, 'e-book':8, 'mommy':6, 'mother':6,
+                  'service desired':9,
                   # require to comment
-                  'tell us':1,
+                  'tell us':2, 'post a photo':6, 'post a pic':5, 'best photo':6, 'answer this question':6,
+                  'tell us why':7, 'tell me why':7,
+                  'screenshot':2, 'your order':3, 'every order':3,
+                  # location based
+                  "we're at":4, '#roadshow':8, 'find us':6, 'come down to':8, 'stop in':1, 'get down here':7, 'come out to':9,
                   # signups....
                   'sign up':2, 'check it out':2, 'message me':2, 'register':2, 'free event':2, #'winner announced':2,
-                  'closed':2,
+                  'must be new to':12, 'fill out':6,
                   # Live shows
-                  'watch us live':6,
+                  'watch us live':10, 'tune in live':10, ' live at ':9,
                   # Facebook and Websites
-                  'www.':1, '.com':1, 'http://':3,
+                  'www.':1, '.com':1, 'http://':3, 'https://':3, '.net':3,
                   'facebook':3,  'facebook page':3, 'fb page':3, 'facebook.com':3, 'page on facebook':3, 'like us on fb':6,
                   'iphone':6, 'dm or ws':8,
                   'twitter':4,
@@ -247,35 +273,49 @@ def checkForContest(post, minScore):
                   'youtube channel':3,
                   'bitly':8, 'goo.gl':5,
                   'whatsapp':4,
+                  'twitch':8,
+                  'instastory':5,
                   # Link to something
-                  'link in':5, 'link on my':5, 'click link':4,
+                  'link in':5, 'link on my':5, 'click link':4, '#linkinbio':5, 'dm me':2,
                   # Purchase indicators
-                  'on orders':2,
+                  'on orders':2, 'call today':7, 'call now':6, 'with every order':6,
                   'coupon':6, 'sale':1, 'purchase':1, 'purchasing':1,
-                  'place an order':6,
+                  'place an order':6, 'with the purchase':8, 'with every purchase':6,
                   'buy':4, 'forsale':4, 'invoice':4, 'sales event':10,
                   '% off':5, 'with any purchase':6, 'with every purchase':6,
+                  'book now':4, 'when you order':6,
                   # Finished
-                  'for participating':2, 'thank you for participating':4,
-                  'better luck':4,
+                  'for participating':2, 'thank you for participating':4, 'the winner of':6,
+                  'better luck':4, 'closed':2, 'now closed':4, 'is our giveaway winner':6, 'have our first winner':8,
+                  'won this':3,
                   # Repost Indicators
-                  '#repost':2, '#reposting':2, 'repost @':2, ' via ':3
+                  '#repost':8, '#reposting':8, 'repost @':8, ' via ':8, 'wish me luck':10,
+                  'pickme':6, 'reposted using':10,
+                  'visit her ':6
                   }
-    dealbreakers = {'spend $':6, 'sales over $':6, #'$300 required' through regex
+    dealbreakers = {'spend $':6, 'sales over $':6, 'purchase over':12, 'order over':12, #'$300 required' through regex
+                    'buy 1 get 1 free':6, 'order now':9, 'order something':9,
+                  # Spam
+                  'free followers':9, 'famenow':9,
                   # Ad for giveaway?
-                  'head over':8, 'head back':7, 'pop over':10, 'check out @':4, 'check out the @':4, 'jump over':10, 'earlier post':4,
+                  'head over':8, 'head back':7, 'over at @':7, 'over on my blog':5,
+                  'pop over':10,
+                  'check out @':4, 'check out the @':4,
+                  'jump over':10, 'earlier post':4,
                   # Reminder post?
                   'previous post':10, 'last post':10, 'posts back':5,  'post back':5, 'original post':10,
-                  'see their acc':8, 'already posted':8, 'past post':3, 'swing over':4,
+                  'see their acc':8, 'already posted':8, 'past post':3, 'swing over':4, 'back few posts':5, 'back a few posts':5, 'few posts':5,
+                  'original photo':4, 'check out our  post':11, 'out latest post':5, 'see my previous':5,
                   # thank you for received?
                   'i received':4, 'thanks to @':4, 'thank you to @':4,
                   # Repost ?
                   '@instatoolsapp':6, '@regram.app':6, 'repostapp':6, 'regrann':6, 'regram':6, '@get_repost':6, '@renstapp':6,
-                  'repost any':6,  # need to repost pictures from before, not yet included
-                  'respost from @':6, 'repostby @':6, 'repost by @':6,
+                  'repost any':6,
+                  'respost from @':6, 'repost  from @':6, 'repost from @':8,
+                  'repostby @':6, 'Posted @withrepost':6,  '@ziapplications':8,
                   # Closed
                   'congratulation':6, 'congrats ':6, 'congrats to':6,
-                  'winner is @':6, 'winner is... @':6, 'winners are @':6, 'winner was @':6,
+                  'winner is @':6, 'winner is... @':6, 'winners are @':6, 'winner was @':6, 'winner @':6,
                   '1st winner':6, 'won my giveaway':6, 'we have a winner':6,
                   'giveaway closed':6
                    }
@@ -321,6 +361,7 @@ def mostCommonComment(instagram, post, minComments=10, minCount=3):
         commentDf = commentDf[commentDf['text'].apply(set).apply(len) > 2]    # Remove: Whitespace Only Entries
         commentDf['text'] = commentDf['text'].str.replace('  ',' ') # Remove: People Tags
         decOrder = commentDf['text'].str.lower().value_counts()
+        print(decOrder)
         if len(decOrder) > 0 and decOrder[0] > minCount:
             print("  commented: ", decOrder[0], decOrder.index[0])
             mostCommented = decOrder.index[0]
@@ -333,11 +374,11 @@ def searchPost4PeopleTag(post):
     ''' returns number of people needed to tag '''
     from re import findall, IGNORECASE
     item = post['caption']['text'].lower()
-    item = " ".join([word for word in item.split(" ") if word.isalnum()==True])
+    #item = " ".join([word for word in item.split(" ") if word.isalnum()==True])
     # Phrase List
     import itertools
     tagList = ["tag", "tagging"]
-    attList = ["at least", "a minimum of", "a minimal"]
+    attList = ["at least", "a minimum of", "a minimal", "me and"]
     phraseList = tagList + [tag+" "+att for tag,att in itertools.product(tagList,attList)]
     # Works if:  Integer
     for phrase in phraseList:
@@ -349,12 +390,27 @@ def searchPost4PeopleTag(post):
             randomSleepTimer(9,10)
             return hitList[0]
     # Works if:  Non-Integer
+    # comment <-> tag
     if   'tag a friend'             in item: return 1
+    elif 'mention a friend'         in item: return 1
+    elif 'tag a mate'               in item: return 1
+    elif 'tag the friend'           in item: return 1
     elif 'tag one friend'           in item: return 1
+    elif 'tag your bff'             in item: return 1
+    elif 'tag your friend'          in item: return 1
     elif 'tag someone'              in item: return 1
+    elif 'comment who'              in item: return 1
+    elif 'tag as many'              in item: return 1
+    elif 'tag at least one'         in item: return 1
     elif 'tag your friends'         in item: return 2
     elif 'tag two friends'          in item: return 2
+    elif 'tag two people'           in item: return 2
+    elif 'tag two '                 in item: return 2
     elif 'tag two of your friends'  in item: return 2
+    elif 'tag two or'               in item: return 2
+    elif 'tag some'                 in item: return 2
+    elif 'tag lots'                 in item: return 2
+    elif 'tag firend'               in item: return 2
     elif 'tag three friends'        in item: return 3
     elif 'tag four friends'         in item: return 4
     elif 'tag five friends'         in item: return 5
@@ -386,6 +442,7 @@ def repost(post, captionText, instagram):
             instagram.editMedia(duplicatePk, newCaption)
             print("  Added tag @%s" % post['user']['username'])
         print("  Already tagged @%s" % post['user']['username'])
+        return True
     else:
         # else
         url = post['image_versions2']['candidates'][0]['url']  # link of largest
@@ -399,14 +456,17 @@ def repost(post, captionText, instagram):
             # Check for caption
             # instagram.mediaInfro(mediaId)
             # instagram.editMedia(self, mediaId, captionText = '')
-        except:  print("  Failed:  repost")
-    return
+            return True
+        except:
+            print("  Failed:  repost")
+            return False
 
 def check4Repost(post):
     ''' Check if repost of picture required '''
     import itertools
     caption = post['caption']['text'].lower()
-    verbIndicators = ["post", "posts", "repost", "reposts", "share", "shares", "pot", "repot"]
+    verbIndicators = ["post", "posts", "repost", "reposts", "share", "shares", "pot", "repot",
+                      "like/share", "like&share", "like &share", "like & share"]
     adjIndicators  = ["the", "this photo", "this picture", "this pic", "this post", "this image", "this and", "and", "a screenshot", "picture", "image", "&"]
     specIndicators = ["shoutout this account", "shout out this account"]
     repostIndicators = [verb+" "+adj for verb,adj in itertools.product(verbIndicators, adjIndicators)] + specIndicators
@@ -417,6 +477,7 @@ def check4Repost(post):
     repostIndicators.remove("posts &")
     repostIndicators.append("repost n tag")
     repostIndicators.append("repost with") # followed by tag often
+    repostIndicators.append("& share")
     for indicator in repostIndicators:
         if caption.find(indicator) != -1:
             print("  [ ] Repost required")
@@ -430,15 +491,17 @@ def getPeopleTagged(post):
     text = post['caption']['text'].lower()
     allFollows = []
     if text.find("follow") != -1:
-        allFollows = findall('([@][\w@_]*)', text)
+        allFollows = findall('([@][\w@_.]*)', text)
         print("  [ ] Follow requried: (%s)" % ", ".join(set(allFollows)))
     return allFollows
 
 def enterContest(instagram, sleepCounter, contests, post, commented, usernameList, caption=""):
     ''' Likes, follows, comments, and reposts if required '''
+    global searchList
     # Follow all tagged users
     userIdList = tagsToUserIds(usernameList)
     sleepCounter += followUsers(userIdList + [post['user']['pk']])
+    if len(userIdList) > 0: searchList = searchList + [str(userId) for userId in userIdList]  # Add new follows to current search for loops
     # Comment Post
     instagram.comment(post['pk'], commented)      # Comment
     print("  [x] Commented")
@@ -500,25 +563,33 @@ def getFollowIdList(instagram):
     ''' returns list of IDs from people I follow '''
     followingList = instagram.getTotalSelfFollowings()
     followingDf = pd.DataFrame(followingList)
-    return followingDf['pk'].tolist()
+    try:    return followingDf['pk'].tolist()
+    except: return []
 
 def usernamesToTagList(peopleNeeded, instagram):
     ''' returns List of n usernames from own followers '''
     instagram.getSelfUserFollowers()
     followers     = pd.DataFrame(instagram.LastJson['users'])
     # Case 1:  Not enough followers
-    if len(followers) < peopleNeeded:  print("not enough followers to tag"); followerNames=["braidsbybreann", "brownhairedbliss", "emmaa.w", "daisy_cullenn", "tara_sagexo", "madisinw", "jenny_filt", "garymannwx", "cam_raee", "tori_auricht", "braids_by_lisa", "mybraidings", "ellaboag", "Jada_autumn", "mimi_floreani", "saramccoy11", "jovanoviclj", "dulce_lo_", "saraawegz", "brunosaltor", "nailp0lish_", "natalieszenas", "mia__chan", "indieconnolly", "zoerelf", "tay.k.18", "fatom_3sk", "dyna_kd", "meryemlaaraich", "maryam_tariq", "lujain_alesawy", "______555suzi__", "xx_anoode", "omneat", "saragrammm", "joslexispam"]
+    if len(followers) < peopleNeeded:
+        print("not enough followers to tag")
+        followerNames=["braidsbybreann", "brownhairedbliss", "emmaa.w", "daisy_cullenn", "tara_sagexo", "madisinw", "jenny_filt", "garymannwx", "cam_raee", "tori_auricht", "braids_by_lisa", "mybraidings", "ellaboag", "Jada_autumn", "mimi_floreani", "saramccoy11", "jovanoviclj", "dulce_lo_", "saraawegz", "brunosaltor", "nailp0lish_", "natalieszenas", "mia__chan", "indieconnolly", "zoerelf", "tay.k.18", "fatom_3sk", "dyna_kd", "meryemlaaraich", "maryam_tariq", "lujain_alesawy", "______555suzi__", "xx_anoode", "omneat", "saragrammm", "joslexispam"]
     # Case 2:  No one Needed
     elif peopleNeeded == 0:  followerNames = ['']
     # Case 3:  Enougn followers
     else:
         followerNames = followers['username'].tolist()
-        #TODO: Remove spam accounts
+    #TODO: Remove spam accounts
+    try:    followerNames.remove(primaryAccount)
+    except ValueError: pass
+    followerNames = [name for name in followerNames if not any(["follow" in name,
+                    "golf" in name, "shop" in name, "app" in name, "furniture" in name,
+                    "free" in name, "hack" in name, "store" in name])]
     # Attempt to randomize picking
     try:    firstTagIx = random.randrange(0,len(followerNames)-1-peopleNeeded)
     except: firstTagIx = 0
     # Tag self first always
-    followerNames = ['robinccg'] + followerNames[firstTagIx:firstTagIx+peopleNeeded-1]
+    followerNames = [primaryAccount] + followerNames[firstTagIx:firstTagIx+peopleNeeded-1]
     return followerNames
 
 def search4NewUsers(searchUserList, sleepCounter):
@@ -606,7 +677,7 @@ def checkCaptions(contests):
 # Other Functions
 def randomSleepTimer(start, stop):
     ''' prevent spam / overflow / suspension '''
-    count = random.randrange(start, stop)
+    count = random.randrange(start, stop)*slowdownFactor
     print("sleeping ", "."*count)
     time.sleep(count) # Count sheeps
     return count      # Return 'Count' to track time slept
@@ -680,8 +751,8 @@ sleepCounter = 0
 
 # Get global parameters
 totalSelfFollowers = pd.DataFrame(instagram.getTotalSelfFollowers())
-totalFollowerIdList = totalSelfFollowers['pk'].tolist()
-totalFollowerUsenameList = totalSelfFollowers['username'].tolist()
+#totalFollowerIdList = totalSelfFollowers['pk'].tolist()
+#totalFollowerUsenameList = totalSelfFollowers['username'].tolist()
 
 
 # If new Usernames given, add them
@@ -793,7 +864,7 @@ for searchTerm in searchList:               # Over User ID's / Personal Key ?
                         elif confirm.lower() == 'ignore':   instagram.like(post['pk']); print("liked. ignored in future."); done = True
                         elif confirm.lower() == 'unfollow': instagram.unfollow(post['user']['pk']); print("unfollowed."); done=True
                         elif confirm.lower() == 'break':    break
-                        elif confirm.lower() == 'comment':  mostCommonComment(instagram, post, minComments=1, minCount=1)
+                        elif confirm.lower() == 'comments': mostCommonComment(instagram, post, minComments=1, minCount=1)
                         elif confirm.lower() == 'help':     print("cancel, finish, ignore, unfollow, break, comment")
                         else:  # not approved
                             commented = confirm
@@ -813,7 +884,7 @@ for searchTerm in searchList:               # Over User ID's / Personal Key ?
 
 
 # Check captions for missing text -> working again
-checkCaptions(contests)
+#checkCaptions(contests)
 # All done.
 cycleFinishTime = time.time()
 # Wrap up
