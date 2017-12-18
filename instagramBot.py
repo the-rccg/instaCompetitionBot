@@ -3,6 +3,8 @@
 Instagram Competition Automation
 @author: RCCG
 
+pip install git+https://github.com/LevPasha/Instagram-API-python
+
 TODOs:
     [ ]  create log, make timing dependent on log since last action was taken, log account name to allow expansion for multiple accounts later on.
     [ ]  split on "bonus" "optional" "double/extra chance" etc to find repost required versus bonus
@@ -34,11 +36,10 @@ TODOs:
     [ ]  maximum number of tags
 
 Features:
-    [x]  Uses List of own followers to tag (filters out spam accounts)
+    [x]  Uses Follow List as
     [x]  Given Names, searches for relevant users and follows them
     [x]  Given Tags, adds the Tag feeds to search for contests
-    [x]  Detects contests based on key word value dictionary
-    [x]  Recognizes foreign languages, phone numbers, websites, reposts to find competition
+    [x]  Detects contests based on key word values
     [x]  Detects if contest requires: Like, Comment, Tags, Repost
     [x]  Allows for Liking, Commenting, Tagging, Reposting
     [x]  Checks if already entered by checking for like
@@ -63,7 +64,7 @@ Maybe Future:
 """
 
 
-import InstagramAPI as insta
+import InstagramAPI_local as insta
 #from InstagramAPI import InstagramAPI as insta
 import pandas as pd
 import random
@@ -79,11 +80,13 @@ print("Successfully loaded all modules")
 accName = ""
 accPw   = ""
 primaryAccount = ""
+# Settings
+validLanguageList = ["en", "de"]
 
 # Book keeping Parameters
 filenames      = ['contests.csv', 'stats.csv']
-testing        =     1  # 2=check, 1=no-repost, 0=automated.
-slowdownFactor =     5  # time between czcles: 5 min * slowdown Factor
+testing        =     2  # 2=check, 1=no-repost, 0=automated.
+slowdownFactor =     5  # time between cycles: 5 min * slowdown Factor
 # Run parameters
 maxLength      =  1000  # Maximum # of  characters for display
 minScore       =     3  # Minimum # of  points     to enter  (contest score)
@@ -106,7 +109,7 @@ minTimePassed  = 72*60  # Minimum # of  minutes    before checking followers aga
 
 # New to add
 searchUserList = []  # 'Thomas Pink'
-searchTagList  = ['#giveaway']#, '#freebies', '#nopurchasenecessary', '#chancetowin'] # , 'freegift'
+searchTagList  = ['#verlosung','#giveaway']#, '#freebies', '#nopurchasenecessary', '#chancetowin'] # , 'freegift'
 #################################################################
 print("Successfully loaded all parameters")
 
@@ -224,14 +227,30 @@ def checkPhoneNumber(item):
         return True
     else: return False
 
-def checkEnglish(text):
+def checkLanguage(text):
     ''' check if item is in the english language, prints if foreign '''
+    global validLanguageList
     from langdetect import detect
     wordCaption = getPlainText(text)  # Only alpha numerical words should count
-    if detect(wordCaption) != 'en':
+    if detect(wordCaption) not in validLanguageList:
         print("  foreign:  ", detect(wordCaption));
         return False
     else: return True
+
+def translateToEnglish(text):
+    ''' uses google translate to translate post to english '''
+    from langdetect import detect
+    wordCaption = getPlainText(text)  # Only alpha numerical words should count
+    if detect(wordCaption) != "en":
+        from googletrans import Translator  # pip install googletrans
+        translator = Translator()
+        translation = None
+        while not translation: 
+            try:    translation = translator.translate(wordCaption, dest='en').text
+            except: randomSleepTimer(1,3)
+        return translation
+    else:
+        return text
 
 def checkForContest(post, minScore):
     ''' checks post for contest by keywords below rules below rules on keywords '''
@@ -322,7 +341,9 @@ def checkForContest(post, minScore):
     # Check for minimum length -> end
     if not checkMinLength(item):  return contestScore, allTags
     # Check if foreign / not in English -> end
-    if not checkEnglish(item):    return contestScore, allTags
+    if not checkLanguage(item):    return contestScore, allTags
+    # Translate if Foreign
+    item = translateToEnglish(item)
     # Check for phone number -> end
     if checkPhoneNumber(item):    return contestScore, allTags
     # If first letter is a @, its a repost
@@ -930,7 +951,7 @@ print()
 
 
 # TODO: Accelerate checking of very active tags
-randomSleepTimer(240,360)
-with open("instagramBot.py", encoding='utf8') as f:
-    code = compile(f.read(), "instagramBot.py", 'exec')
-    exec(code)
+#randomSleepTimer(240,360)
+#with open("instagramBot.py", encoding='utf8') as f:
+#    code = compile(f.read(), "instagramBot.py", 'exec')
+#    exec(code)
